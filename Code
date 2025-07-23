@@ -1,0 +1,262 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CropInfinity v1.5 – Multi-Crop Fixed</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9f9f9;
+      padding: 20px;
+      text-align: center;
+    }
+    canvas {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      cursor: crosshair;
+      margin-top: 20px;
+    }
+    .controls, .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 15px;
+    }
+    button {
+      padding: 10px 16px;
+      font-weight: bold;
+      border-radius: 6px;
+      border: none;
+      background-color: #ddd;
+      cursor: pointer;
+    }
+    button:hover { background-color: #bbb; }
+    button.active { background-color: #4CAF50; color: white; }
+  </style>
+</head>
+<body>
+
+  <h2>CropInfinity v1.5 (Multi-Crop + Fixed Cursor)</h2>
+  <input type="file" id="imageUpload" accept="image/*"><br><br>
+
+  <div class="controls">
+    Zoom: <input type="range" id="zoomSlider" min="0.1" max="2" step="0.1" value="1">
+    Dot Size: <input type="range" id="dotSizeSlider" min="1" max="10" value="4">
+  </div>
+
+  <div class="button-group">
+    <button id="cropBtn" onclick="toggleCrop()">Crop Mode</button>
+    <button onclick="undo()">Undo</button>
+    <button onclick="redo()">Redo</button>
+    <button onclick="downloadCropped()">Download</button>
+    <button onclick="resetCanvas()">Reset</button>
+  </div>
+
+  <canvas id="canvas" width="800" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const cropBtn = document.getElementById('cropBtn');
+    let scale = 1;
+    let dotSize = 4;
+    let cropMode = false;
+    let showPreview = false;
+    let hoverX = 0, hoverY = 0;
+    let points = [], redoStack = [], isClosed = false, imgLoaded = false;
+    let img = new Image(), originalImg = null;
+
+    document.getElementById('imageUpload').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        img = new Image();
+        img.onload = function () {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          imgLoaded = true;
+          originalImg = img;
+          resetState();
+          draw();
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('zoomSlider').addEventListener('input', function () {
+      scale = parseFloat(this.value);
+      draw();
+    });
+
+    document.getElementById('dotSizeSlider').addEventListener('input', function () {
+      dotSize = parseInt(this.value);
+      draw();
+    });
+
+    canvas.addEventListener('mousemove', function (e) {
+      if (!cropMode || !imgLoaded || isClosed) return;
+      const rect = canvas.getBoundingClientRect();
+      hoverX = (e.clientX - rect.left) / scale;
+      hoverY = (e.clientY - rect.top) / scale;
+      showPreview = true;
+      draw();
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      showPreview = false;
+      draw();
+    });
+
+    canvas.addEventListener('click', function (e) {
+      if (!cropMode || !imgLoaded) return;
+
+      if (isClosed) {
+        points = [];
+        redoStack = [];
+        isClosed = false;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+
+      points.push({ x, y });
+      redoStack = [];
+      draw();
+    });
+
+    canvas.addEventListener('dblclick', function () {
+      if (!cropMode || points.length < 3) return;
+      isClosed = true;
+      draw();
+    });
+
+    function toggleCrop() {
+      cropMode = !cropMode;
+      cropBtn.classList.toggle("active", cropMode);
+    }
+
+    function undo() {
+      if (points.length > 0) {
+        isClosed = false;
+        redoStack.push(points.pop());
+        draw();
+      }
+    }
+
+    function redo() {
+      if (redoStack.length > 0) {
+        points.push(redoStack.pop());
+        draw();
+      }
+    }
+
+    function draw() {
+      if (!imgLoaded) return;
+
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+
+      if (points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        if (isClosed) {
+          ctx.closePath();
+        } else {
+          ctx.lineTo(hoverX, hoverY);
+        }
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2 / scale;
+        ctx.stroke();
+
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, dotSize / scale, 0, 2 * Math.PI);
+          ctx.fillStyle = 'red';
+          ctx.fill();
+        }
+      }
+
+      if (cropMode && showPreview && !isClosed) {
+        ctx.beginPath();
+        ctx.arc(hoverX, hoverY, dotSize / scale, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,0,0,0.3)';
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function downloadCropped() {
+      if (!isClosed || points.length < 3) {
+        alert("Draw and close your shape first (dbl click).");
+        return;
+      }
+
+      const xs = points.map(p => p.x), ys = points.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const width = maxX - minX, height = maxY - minY;
+
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+
+      tempCtx.beginPath();
+      tempCtx.moveTo(points[0].x - minX, points[0].y - minY);
+      for (let i = 1; i < points.length; i++) {
+        tempCtx.lineTo(points[i].x - minX, points[i].y - minY);
+      }
+      tempCtx.closePath();
+      tempCtx.clip();
+      tempCtx.drawImage(img, -minX, -minY);
+
+      const link = document.createElement('a');
+      link.download = 'cropped-image.png';
+      link.href = tempCanvas.toDataURL('image/png');
+      link.click();
+
+      // Reset after download for new crop
+      points = [];
+      redoStack = [];
+      isClosed = false;
+      draw();
+    }
+
+    function resetState() {
+      points = [];
+      redoStack = [];
+      isClosed = false;
+      cropMode = false;
+      cropBtn.classList.remove("active");
+    }
+
+    function resetCanvas() {
+      resetState();
+      if (originalImg) {
+        img = originalImg;
+        scale = 1;
+        document.getElementById('zoomSlider').value = 1;
+        draw();
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  </script>
+
+</body>
+</html>
