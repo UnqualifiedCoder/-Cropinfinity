@@ -1,1 +1,1 @@
-# -Cropinfinity
+📄 License: [MIT](LICENSE)
