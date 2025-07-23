@@ -1,6 +1,6 @@
-# 🖼️ CropInfinity
+# CropInfinity
 
-**CropInfinity** is a lightweight, browser-based image cropping tool built entirely with HTML5 Canvas and JavaScript — no backend, no ads, no paywalls. It offers precision polygon cropping, pixel-level control, multi-crop support, and a smooth UI designed for creators, designers, and everyday users.
+**CropInfinity** is a lightweight, browser-based image cropping tool built entirely with HTML5 Canvas and JavaScript no backend, no ads, no paywalls. It offers precision polygon cropping, pixel-level control, multi-crop support, and a smooth UI designed for creators, designers, and everyday users.
 
 > ✂️ Draw any custom shape.  
 > 💾 Crop and download in high resolution.  
